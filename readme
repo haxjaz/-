@@ -1,1 +1,57 @@
+# Hand Measurement Demo Plan
 
+This document captures the technical plan for building an automated hand-measurement demo that uses a reference credit card to infer real-world dimensions. The goal is to achieve ±3 mm accuracy for palm width, overall hand length (wrist to tip of middle finger), and middle-finger length measurements, and to recommend the correct glove size from the existing database by **14 Nov**.
+
+## High-Level Workflow
+1. **Image Acquisition (Desktop Demo Phase)**
+   - Users upload a single photo where their hand and a standard credit card lie on the same plane.
+   - Guidance overlays or instructions emphasize: strong color contrast between card and background, well-lit environment, and camera roughly parallel to the table.
+
+2. **Credit Card Detection & Scene Rectification**
+   - Automatically localize the four corners of the credit card using classical CV (edge detection + contour filtering) backed by a lightweight detector if needed.
+   - Estimate a homography to map the card to a canonical rectangle (85.60 mm × 53.98 mm) and recover a pixel-to-millimeter scale.
+   - Produce a quality score by checking corner-fit residuals; prompt for a retake only when residuals exceed the error budget.
+
+3. **Hand Segmentation & Keypoint Extraction**
+   - Run MediaPipe Hands (or comparable lightweight model) to detect wrist, palm center, and fingertip landmarks.
+   - Complement with a segmentation/refinement step to ensure the palm boundary is clean even under difficult lighting or skin tones.
+   - Enforce geometric sanity checks (e.g., finger ordering, hand orientation) to reject implausible detections.
+
+4. **Metric Measurement**
+   - Convert landmark distances to millimeters using the card-derived scale.
+   - Compute:
+     - Palm width (distance between palm-side landmarks across the knuckles).
+     - Hand length (wrist landmark to middle-finger tip along the dominant axis).
+     - Middle-finger length (base joint to fingertip).
+   - Aggregate results across multiple detections on the same frame if model yields several candidate hands; use weighted averaging and flag high variance cases.
+
+5. **Error Analysis & Calibration**
+   - Break down the ±3 mm budget into contributions from card detection, homography residuals, landmark jitter, and segmentation noise.
+   - Build a validation set covering varied skin tones, lighting, and phone models; each sample should include ground-truth manual measurements for all three dimensions.
+   - Report accuracy statistics (mean error, standard deviation, worst-case) and annotate failure cases for targeted improvements.
+
+6. **Sizing Recommendation Engine**
+   - Normalize the measured dimensions to match database schema (palm width, hand length, middle-finger length).
+   - Implement rule-based mapping with hysteresis: when measurements are near adjacent size boundaries, prefer the larger size and display an advisory note.
+   - Return a structured result containing the three measurements, recommended size, and confidence flags.
+
+7. **Demo Delivery**
+   - Implement as a desktop Python script that accepts an image path and prints the measured dimensions plus the recommended glove size.
+   - Bundle quick-start instructions, dependency requirements, and sample images for manual verification.
+   - Provide a roadmap for porting to mobile (API access to camera intrinsics, on-device inference considerations) once the desktop demo meets accuracy targets.
+
+## Milestones
+- **Week 1:** Prototype credit-card detection and homography; draft user guidance text.
+- **Week 2:** Integrate hand keypoint extraction; produce first end-to-end measurement outputs.
+- **Week 3:** Error-budget validation with collected samples; refine failure handling.
+- **By 14 Nov:** Deliver validated desktop demo, documentation, and next-step recommendations for mobile deployment.
+
+## Data Requirements
+- Diverse photo set (lighting, backgrounds, skin tones) with corresponding manual measurements.
+- Metadata log for each sample (device model if available, shooting angle notes) to correlate with error trends.
+- Record of measurement outcomes and flags to inform continuous improvement.
+
+## Open Questions & Follow-Ups
+- Confirm availability of additional annotated data if accuracy stalls.
+- Define how glove database handles intermediate sizes or custom fit (if applicable).
+- Align on deployment roadmap post-demo (e.g., native mobile vs. cross-platform, on-device vs. cloud inference).
